@@ -52,7 +52,7 @@ npm run build
 ```json
 {
   "name": "MyScript",
-  "classType": "Script",
+  "className": "Script",
   "outputPath": "src/Folder/MyScript.server.lua",
   "disabled": false
 }

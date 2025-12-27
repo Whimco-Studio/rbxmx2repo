@@ -121,7 +121,7 @@ export async function exportRbxmx(parsed: ParsedRbxmx, options: ExportOptions): 
     const relPath = toPosixPath(path.join("src", ...segments, fileName));
     manifest.push({
       name: script.name,
-      classType: script.className,
+      className: script.className,
       outputPath: relPath,
       disabled: Boolean(script.properties.Disabled)
     });

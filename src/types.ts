@@ -19,7 +19,7 @@ export interface ParsedRbxmx {
 
 export interface ManifestEntry {
   name: string;
-  classType: string;
+  className: string;
   outputPath: string;
   disabled: boolean;
 }

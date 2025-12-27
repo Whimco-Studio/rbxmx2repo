@@ -50,12 +50,21 @@ async function run(): Promise<void> {
     process.exit(1);
   }
 
+  // CLI: resolve paths and validate the input file before parsing.
   const inputPath = path.resolve(process.cwd(), input);
   const outDir = path.resolve(process.cwd(), options.out);
 
+  const stat = await fs.stat(inputPath).catch(() => null);
+  if (!stat || !stat.isFile()) {
+    console.error(`Input file not found: ${inputPath}`);
+    process.exit(1);
+  }
+
+  // CLI -> parser: parse the .rbxmx XML into an Instance tree.
   await ensureOutputDir(outDir);
   const parsed = await parseRbxmx(inputPath);
 
+  // CLI -> exporter: write scripts/models to disk and emit the manifest.
   await exportRbxmx(parsed, {
     outDir,
     keepModels: options.keepModels || !options.scriptsOnly,
