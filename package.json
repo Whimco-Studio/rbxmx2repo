@@ -1,0 +1,27 @@
+{
+  "name": "rbxmx2repo",
+  "version": "0.1.0",
+  "description": "Convert Roblox .rbxmx files into repo-style filesystem structures.",
+  "license": "MIT",
+  "bin": {
+    "rbxmx2repo": "dist/index.js"
+  },
+  "scripts": {
+    "build": "tsc",
+    "prepack": "npm run build",
+    "start": "node dist/index.js"
+  },
+  "files": [
+    "dist/**",
+    "README.md",
+    "LICENSE"
+  ],
+  "dependencies": {
+    "fast-xml-parser": "^4.3.5",
+    "minimist": "^1.2.8"
+  },
+  "devDependencies": {
+    "@types/node": "^20.11.30",
+    "typescript": "^5.4.5"
+  }
+}
