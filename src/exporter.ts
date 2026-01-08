@@ -77,9 +77,10 @@ function assignPathSegments(
   }
 }
 
-function ensureDir(filePath: string): Promise<void> {
-  return fs.mkdir(path.dirname(filePath), { recursive: true });
+async function ensureDir(filePath: string): Promise<void> {
+  await fs.mkdir(path.dirname(filePath), { recursive: true });
 }
+
 
 function getPathSegments(node: InstanceNode): string[] {
   const segments: string[] = [];
