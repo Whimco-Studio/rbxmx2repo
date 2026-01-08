@@ -3,9 +3,23 @@ import path from "node:path";
 import { XMLBuilder } from "fast-xml-parser";
 import { ExportOptions, InstanceNode, ManifestEntry, ParsedRbxmx, ScriptClass } from "./types";
 import { getUniqueFileName, getUniqueSegment, sanitizeName, toPosixPath } from "./fs-utils";
-import { getItemProperties, readProperty } from "./parser";
 
 const SCRIPT_CLASSES: ScriptClass[] = ["Script", "LocalScript", "ModuleScript"];
+const SERVICE_ROOTS = [
+  "Workspace",
+  "ServerScriptService",
+  "ServerStorage",
+  "ReplicatedStorage",
+  "StarterPlayer",
+  "StarterGui",
+  "StarterPack",
+  "Lighting",
+  "SoundService",
+  "Players",
+  "Teams",
+  "TextChatService",
+  "Chat"
+];
 
 const builder = new XMLBuilder({
   ignoreAttributes: false,
@@ -54,7 +68,8 @@ function assignPathSegments(
   usedSegments: Map<string, Set<string>>
 ): void {
   for (const child of node.children) {
-    const baseName = sanitizeName(child.name || child.className);
+    const isServiceRoot = node.className === "ROOT" && SERVICE_ROOTS.includes(child.className);
+    const baseName = sanitizeName(isServiceRoot ? child.className : child.name || child.className);
     const segment = getUniqueSegment(usedSegments, parentPath || ".", baseName);
     child.pathSegment = segment;
     const childPath = path.posix.join(parentPath, segment);
@@ -91,8 +106,39 @@ function findParent(node: InstanceNode): InstanceNode | undefined {
   return parentMap.get(node.id);
 }
 
+function getServiceRoot(node: InstanceNode): string {
+  let current: InstanceNode | undefined = node;
+  let parent = findParent(node);
+  while (parent && parent.className !== "ROOT") {
+    current = parent;
+    parent = findParent(parent);
+  }
+  if (!current) {
+    return "ROOT";
+  }
+  if (SERVICE_ROOTS.includes(current.className)) {
+    return current.className;
+  }
+  return current.name;
+}
+
 function getOutputDir(outDir: string, segments: string[]): string {
   return path.join(outDir, "src", ...segments);
+}
+
+function buildAssetXml(parsed: ParsedRbxmx, itemRecord: Record<string, unknown>): string {
+  const rootTemplate: Record<string, unknown> = {
+    ...parsed.rootExtras,
+    ...parsed.rootAttributes
+  };
+  const rootObject: Record<string, unknown> = {
+    ...rootTemplate,
+    Item: itemRecord
+  };
+  const xmlObject = {
+    [parsed.rootTag]: rootObject
+  };
+  return builder.build(xmlObject);
 }
 
 export async function exportRbxmx(parsed: ParsedRbxmx, options: ExportOptions): Promise<void> {
@@ -122,6 +168,7 @@ export async function exportRbxmx(parsed: ParsedRbxmx, options: ExportOptions): 
     manifest.push({
       name: script.name,
       className: script.className,
+      serviceRoot: getServiceRoot(script),
       outputPath: relPath,
       disabled: Boolean(script.properties.Disabled)
     });
@@ -131,30 +178,22 @@ export async function exportRbxmx(parsed: ParsedRbxmx, options: ExportOptions): 
     const assetsDir = path.join(outDir, "assets");
     await fs.mkdir(assetsDir, { recursive: true });
     const assetNames = new Map<string, Set<string>>();
-    const rootTemplate: Record<string, unknown> = {
-      ...parsed.rootExtras,
-      ...parsed.rootAttributes
-    };
 
-    for (const item of parsed.rootItems) {
-      const itemRecord = item as Record<string, unknown>;
-      const className = String(itemRecord["@_class"] ?? "Folder");
-      if (isScriptClass(className)) {
+    const serviceTargets = new Set(["Workspace", "ServerStorage", "ReplicatedStorage"]);
+    for (const serviceNode of parsed.rootNode.children) {
+      if (!serviceTargets.has(serviceNode.className)) {
         continue;
       }
-      const itemNameRaw = readProperty(getItemProperties(itemRecord), "Name") ?? className;
-      const itemName = sanitizeName(String(itemNameRaw));
-      const uniqueName = getUniqueSegment(assetNames, ".", itemName);
-      const assetPath = path.join(assetsDir, `${uniqueName}.rbxmx`);
-      const rootObject: Record<string, unknown> = {
-        ...rootTemplate,
-        Item: itemRecord
-      };
-      const xmlObject = {
-        [parsed.rootTag]: rootObject
-      };
-      const xml = builder.build(xmlObject);
-      await fs.writeFile(assetPath, xml, "utf8");
+      for (const child of serviceNode.children) {
+        if (isScriptClass(child.className) || !child.rawItem) {
+          continue;
+        }
+        const itemName = sanitizeName(child.name || child.className);
+        const uniqueName = getUniqueSegment(assetNames, ".", itemName);
+        const assetPath = path.join(assetsDir, `${uniqueName}.rbxmx`);
+        const xml = buildAssetXml(parsed, child.rawItem);
+        await fs.writeFile(assetPath, xml, "utf8");
+      }
     }
   }
 

@@ -5,6 +5,7 @@ export interface InstanceNode {
   name: string;
   className: string;
   properties: Record<string, string | boolean | undefined>;
+  rawItem?: Record<string, unknown>;
   children: InstanceNode[];
   pathSegment?: string;
 }
@@ -20,6 +21,7 @@ export interface ParsedRbxmx {
 export interface ManifestEntry {
   name: string;
   className: string;
+  serviceRoot: string;
   outputPath: string;
   disabled: boolean;
 }

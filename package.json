@@ -8,8 +8,14 @@
   },
   "scripts": {
     "build": "tsc",
+    "prepack": "npm run build",
     "start": "node dist/index.js"
   },
+  "files": [
+    "dist/**",
+    "README.md",
+    "LICENSE"
+  ],
   "dependencies": {
     "fast-xml-parser": "^4.3.5",
     "minimist": "^1.2.8"

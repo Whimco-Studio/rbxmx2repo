@@ -62,6 +62,7 @@ function buildNode(item: Record<string, unknown>): InstanceNode {
       Disabled: disabled,
       Source: source
     },
+    rawItem: item,
     children: []
   };
   nextId += 1;
@@ -95,6 +96,7 @@ export async function parseRbxmx(filePath: string): Promise<ParsedRbxmx> {
     name: "ROOT",
     className: "ROOT",
     properties: {},
+    rawItem: undefined,
     children: items.map((item) => buildNode(item))
   };
 

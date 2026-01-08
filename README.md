@@ -20,6 +20,24 @@ Convert Roblox `.rbxmx` XML models into a clean, repo-based filesystem layout de
 rbxmx2repo input.rbxmx --out ./repo
 ```
 
+### Local development run
+
+```bash
+npm run build
+node dist/index.js input.rbxmx --out ./repo
+```
+
+### Global install
+
+```bash
+npm i -g .
+rbxmx2repo input.rbxmx --out ./repo
+```
+
+### Homebrew
+
+A Homebrew formula can install this package and expose `rbxmx2repo` on PATH via the `bin` entry in `package.json`.
+
 ### Flags
 
 - `--scripts-only` (default) Only export script sources into `src/`.
@@ -53,6 +71,7 @@ npm run build
 {
   "name": "MyScript",
   "className": "Script",
+  "serviceRoot": "ServerScriptService",
   "outputPath": "src/Folder/MyScript.server.lua",
   "disabled": false
 }
