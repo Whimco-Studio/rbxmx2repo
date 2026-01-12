@@ -7,6 +7,12 @@
     "rbxmx2repo": "dist/index.js"
   },
   "author": "The_Pr0fessor",
+  "keywords": [
+    "roblox",
+    "rbxmx",
+    "repo",
+    "rojo"
+  ],
   "scripts": {
     "build": "tsc",
     "prepack": "npm run build",
