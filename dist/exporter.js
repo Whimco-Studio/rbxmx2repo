@@ -46,6 +46,19 @@ function getScriptExtension(className, plainLua) {
             return ".lua";
     }
 }
+function getInitFileName(className, plainLua) {
+    if (plainLua) {
+        return "init.lua";
+    }
+    switch (className) {
+        case "Script":
+            return "init.server.lua";
+        case "LocalScript":
+            return "init.client.lua";
+        case "ModuleScript":
+            return "init.lua";
+    }
+}
 function collectScriptNodes(root) {
     const scripts = [];
     const stack = [root];
@@ -127,34 +140,98 @@ function buildAssetXml(parsed, itemRecord) {
     };
     return builder.build(xmlObject);
 }
+async function exportScript(script, outDir, usedSegments, usedFiles, manifest, plainLua, processedScripts, parentScriptFolderPath) {
+    // Skip if already processed as a child of another script
+    if (processedScripts.has(script.id)) {
+        return;
+    }
+    const source = String(script.properties.Source ?? "");
+    const baseName = (0, fs_utils_1.sanitizeName)(script.name || script.className);
+    // Check if script has children (any children, not just scripts)
+    const hasChildren = script.children.length > 0;
+    let outputDir;
+    let outputFile;
+    let relPath;
+    let scriptFolderSegments;
+    if (parentScriptFolderPath) {
+        // This is a child script of a script with children - use parent's folder path
+        scriptFolderSegments = parentScriptFolderPath;
+        const dirKey = scriptFolderSegments.join("/") || ".";
+        if (hasChildren) {
+            // Child script also has children - create nested folder
+            const folderName = (0, fs_utils_1.getUniqueSegment)(usedSegments, dirKey, baseName);
+            scriptFolderSegments = [...parentScriptFolderPath, folderName];
+            outputDir = getOutputDir(outDir, scriptFolderSegments);
+            const initFileName = getInitFileName(script.className, plainLua);
+            outputFile = node_path_1.default.join(outputDir, initFileName);
+            relPath = (0, fs_utils_1.toPosixPath)(node_path_1.default.join("src", ...scriptFolderSegments, initFileName));
+        }
+        else {
+            // Child script without children - export as normal file in parent's folder
+            const extension = getScriptExtension(script.className, plainLua);
+            const fileName = (0, fs_utils_1.getUniqueFileName)(usedFiles, dirKey, baseName, extension);
+            outputDir = getOutputDir(outDir, scriptFolderSegments);
+            outputFile = node_path_1.default.join(outputDir, fileName);
+            relPath = (0, fs_utils_1.toPosixPath)(node_path_1.default.join("src", ...scriptFolderSegments, fileName));
+        }
+    }
+    else {
+        // This is a top-level script (not a child of another script)
+        const segments = getPathSegments(script).slice(0, -1);
+        const dirKey = segments.join("/") || ".";
+        if (hasChildren) {
+            // Script with children: create folder with init.{ext} file
+            const folderName = (0, fs_utils_1.getUniqueSegment)(usedSegments, dirKey, baseName);
+            scriptFolderSegments = [...segments, folderName];
+            outputDir = getOutputDir(outDir, scriptFolderSegments);
+            const initFileName = getInitFileName(script.className, plainLua);
+            outputFile = node_path_1.default.join(outputDir, initFileName);
+            relPath = (0, fs_utils_1.toPosixPath)(node_path_1.default.join("src", ...scriptFolderSegments, initFileName));
+        }
+        else {
+            // Script without children: export as normal file
+            const extension = getScriptExtension(script.className, plainLua);
+            const fileName = (0, fs_utils_1.getUniqueFileName)(usedFiles, dirKey, baseName, extension);
+            outputDir = getOutputDir(outDir, segments);
+            outputFile = node_path_1.default.join(outputDir, fileName);
+            relPath = (0, fs_utils_1.toPosixPath)(node_path_1.default.join("src", ...segments, fileName));
+            scriptFolderSegments = segments;
+        }
+    }
+    await ensureDir(outputFile);
+    await promises_1.default.writeFile(outputFile, source, "utf8");
+    manifest.push({
+        name: script.name,
+        className: script.className,
+        serviceRoot: getServiceRoot(script),
+        outputPath: relPath,
+        disabled: Boolean(script.properties.Disabled)
+    });
+    // Mark this script as processed
+    processedScripts.add(script.id);
+    // If script has children, process them recursively
+    if (hasChildren) {
+        for (const child of script.children) {
+            if (isScriptClass(child.className)) {
+                // Process child script with parent's folder path
+                await exportScript(child, outDir, usedSegments, usedFiles, manifest, plainLua, processedScripts, scriptFolderSegments);
+            }
+            // Non-script children are not exported (only scripts are exported)
+        }
+    }
+}
 async function exportRbxmx(parsed, options) {
     const { outDir, keepModels, plainLua } = options;
     const usedSegments = new Map();
     const usedFiles = new Map();
     const manifest = [];
+    const processedScripts = new Set();
     parentMap.clear();
     mapParents(parsed.rootNode);
     assignPathSegments(parsed.rootNode, "", usedSegments);
     const scripts = collectScriptNodes(parsed.rootNode);
     for (const script of scripts) {
-        const segments = getPathSegments(script).slice(0, -1);
-        const dirKey = segments.join("/") || ".";
-        const baseName = (0, fs_utils_1.sanitizeName)(script.name || script.className);
-        const extension = getScriptExtension(script.className, plainLua);
-        const fileName = (0, fs_utils_1.getUniqueFileName)(usedFiles, dirKey, baseName, extension);
-        const outputDir = getOutputDir(outDir, segments);
-        const outputFile = node_path_1.default.join(outputDir, fileName);
-        const source = String(script.properties.Source ?? "");
-        await ensureDir(outputFile);
-        await promises_1.default.writeFile(outputFile, source, "utf8");
-        const relPath = (0, fs_utils_1.toPosixPath)(node_path_1.default.join("src", ...segments, fileName));
-        manifest.push({
-            name: script.name,
-            className: script.className,
-            serviceRoot: getServiceRoot(script),
-            outputPath: relPath,
-            disabled: Boolean(script.properties.Disabled)
-        });
+        await exportScript(script, outDir, usedSegments, usedFiles, manifest, plainLua, processedScripts, undefined);
     }
     if (keepModels) {
         const assetsDir = node_path_1.default.join(outDir, "assets");
